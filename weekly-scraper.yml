@@ -1,0 +1,85 @@
+name: Weekly Kern County Podcast Generation
+
+on:
+  schedule:
+    # Every Monday at 8:00 AM PST (16:00 UTC)
+    - cron: '0 16 * * 1'
+  workflow_dispatch:  # Allows manual trigger
+    inputs:
+      debug_mode:
+        description: 'Run in debug mode'
+        required: false
+        default: 'false'
+
+jobs:
+  generate-podcast-content:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Install dependencies
+      run: |
+        cd scraper
+        pip install -r requirements.txt
+        
+    - name: Run weekly scraper
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        DEBUG_MODE: ${{ github.event.inputs.debug_mode }}
+      run: |
+        cd scraper
+        python main.py
+        
+    - name: Archive previous week
+      run: |
+        # Move last week's files to archive
+        if [ -d "data/notebooklm-files" ]; then
+          DATE=$(date -d "last monday" '+%Y-%m-%d')
+          mkdir -p "data/archive/$DATE"
+          cp -r data/notebooklm-files/* "data/archive/$DATE/" || true
+        fi
+        
+    - name: Commit and push results
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "Kern County Podcast Bot"
+        git add .
+        git diff --staged --quiet || git commit -m "📅 Weekly podcast content update - $(date '+%Y-%m-%d')"
+        git push
+        
+    - name: Create release with podcast files
+      if: success()
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: podcast-${{ github.run_number }}
+        release_name: "Weekly Podcast - $(date '+%B %d, %Y')"
+        body: |
+          🎙️ **Kern County Weekly Podcast Files**
+          
+          Generated on: $(date '+%B %d, %Y')
+          
+          **Files for NotebookLM:**
+          - meeting-summaries.txt
+          - themes-connections.txt  
+          - podcast-guidelines.txt
+          
+          **Download and upload these to NotebookLM to generate your podcast!**
+        draft: false
+        prerelease: false
+
+    - name: Upload podcast files as artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: notebooklm-files-${{ github.run_number }}
+        path: data/notebooklm-files/
