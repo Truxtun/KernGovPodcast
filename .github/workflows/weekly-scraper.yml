@@ -2,8 +2,8 @@ name: Weekly Kern County Podcast Generation
 
 on:
   schedule:
-    # Every Monday at 8:00 AM PST (16:00 UTC)
-    - cron: '0 16 * * 1'
+    # Every Friday at 12 PM PST (22:00 UTC)
+    - cron: '0 22 * * 5'
   workflow_dispatch:  # Allows manual trigger
     inputs:
       debug_mode:
